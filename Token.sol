@@ -312,37 +312,28 @@ contract Token is
     }
 
     function _transfer(
-        address _from,
-        address _to,
-        uint256 _amount
+       address _from,
+       address _to,
+       uint256 _amount
     ) internal whenNotPaused {
-        require(_from != address(0), "ERC20: transfer from the zero address");
-        require(_to != address(0), "ERC20: transfer to the zero address");
+       require(_from != address(0), "ERC20: transfer from the zero address");
+       require(_to != address(0), "ERC20: transfer to the zero address");
 
         if (balanceOf(_from) < _amount) {
             revert("Insufficient Funds For Transfer");
         }
 
-        if (
-            balanceOf(_to) >= holdingLimit && !isExcludedFromHoldingLimit[_to]
-        ) {
+        if (balanceOf(_to) >= holdingLimit && !isExcludedFromHoldingLimit[_to]) {
             revert("Holding Tokens exceeded!");
         }
 
         uint256 amount = _amount;
 
-        if (
-            !isExcludedFromHoldingLimit[_to] &&
-            balanceOf(_to) + amount > holdingLimit
-        ) {
+        if (!isExcludedFromHoldingLimit[_to] && balanceOf(_to) + amount > holdingLimit) {
             amount = amount - (balanceOf(_to) + amount - holdingLimit);
         }
 
         uint256 debaseToken = _fragmentToDebaseToken(amount);
-        if (isExcludedFromDebasing[_from]) {
-            debaseToken = _fragmentToDebaseTokenWithBase(amount);
-        }
-
         uint256 sellTax = 0;
 
         if (_from != owner() && lpPools[_to]) {
@@ -351,16 +342,14 @@ contract Token is
 
         uint256 amountAfterTax = amount - sellTax;
         uint256 debaseTokenAfterTax = _fragmentToDebaseToken(amountAfterTax);
-        uint256 adjustedBalance = isExcludedFromDebasing[_to]
-            ? _fragmentToDebaseTokenWithBase(amountAfterTax)
-            : debaseTokenAfterTax;
+        uint256 adjustedBalance = isExcludedFromDebasing[_to] ? _fragmentToDebaseTokenWithBase(amountAfterTax) : debaseTokenAfterTax;
 
         _balances[_from] -= debaseToken;
 
         if (isExcludedFromDebasing[_to]) {
             _balances[_to] += adjustedBalance;
         } else {
-            _balances[_to] += debaseTokenAfterTax;
+           _balances[_to] += debaseTokenAfterTax;
         }
 
         treasuryBalance += sellTax;
@@ -369,10 +358,10 @@ contract Token is
         emit Transfer(_from, _to, amountAfterTax);
 
         if (sellTax > 0) {
-            emit Transfer(_from, treasuryWallet, sellTax);
+           emit Transfer(_from, treasuryWallet, sellTax);
         }
 
-        // Tracking of excluded Debasing
+        // Update excludeDebasingSupply based on the transfer
         if (!isExcludedFromDebasing[_from] && isExcludedFromDebasing[_to]) {
             excludeDebasingSupply += amountAfterTax;
         }
@@ -381,6 +370,7 @@ contract Token is
             excludeDebasingSupply -= amountAfterTax;
         }
 
+        // Ensure that treasuryBalance updates are accounted for
         if (treasuryBalance > 0) {
             _sendTokensTreasuryWallet(treasuryBalance, treasuryWallet);
         }
@@ -546,25 +536,25 @@ contract Token is
         bool _isExcluded
     ) internal {
         require(_account != address(0), "Account shouldn't be zero.");
+
         bool prevIsExcluded = isExcludedFromDebasing[_account];
         uint256 prevBalance = balanceOf(_account);
 
-        
         if (prevIsExcluded != _isExcluded) {
             isExcludedFromDebasing[_account] = _isExcluded;
-    
-            if (!prevIsExcluded && _isExcluded) {
-                uint256 adjustedBalance = _fragmentToDebaseTokenWithBase(prevBalance);
-                _balances[_account] = adjustedBalance;
-                excludeDebasingSupply += adjustedBalance;
-                
-            } else if (prevIsExcluded && !_isExcluded) {
-                uint256 adjustedBalance = _fragmentToDebaseToken(prevBalance);
-                _balances[_account] = adjustedBalance;
-                excludeDebasingSupply -= prevBalance;
+
+            if (_isExcluded) {
+               // Account is being excluded
+                _balances[_account] = _fragmentToDebaseTokenWithBase(prevBalance);
+                excludeDebasingSupply += _balances[_account];
+            } else {
+                // Account is being included
+                _balances[_account] = _fragmentToDebaseToken(prevBalance);
+                excludeDebasingSupply -= _balances[_account];
             }
         }
     }
+
 
     function multiExcludedFromDebasing(
         address[] memory _accounts,
