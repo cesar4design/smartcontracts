@@ -457,26 +457,24 @@ contract StakingRewards is
         }
     }
 
-    function _calculateTotalRefRewardToClaim(
-        address _referrer
-    ) internal view returns (uint256) {
-        address[] memory firstRefereeList = firstReferees[_referrer].values();
-        address[] memory secondRefereeList = secondReferees[_referrer].values();
+    function _calculateTotalRefRewardToClaim( address _referrer ) internal view returns (uint256) {
+      address[] memory firstRefereeList = firstReferees[_referrer].values();
+      address[] memory secondRefereeList = secondReferees[_referrer].values();
 
-        uint256 firstRefereeCnt = firstRefereeList.length;
-        uint256 secondRefereeCnt = secondRefereeList.length;
+      uint256 firstRefereeCnt = firstRefereeList.length;
+      uint256 secondRefereeCnt = secondRefereeList.length;
 
-        uint256 totalReward = 0;
+      uint256 totalReward = 0;
 
-        for (uint256 i = 0; i < firstRefereeCnt; ++i) {
-            totalReward += firstRefRewards[_referrer][firstRefereeList[i]];
-        }
-    
-        for (uint256 i = 0; i < secondRefereeCnt; ++i) {
-            totalReward += secondRefRewards[_referrer][secondRefereeList[i]];
-        }
+      for (uint256 i = 0; i < firstRefereeCnt; ++i) {
+          totalReward += firstRefRewards[_referrer][firstRefereeList[i]];
+      }
 
-        return totalReward;
+      for (uint256 i = 0; i < secondRefereeCnt; ++i) {
+        totalReward += secondRefRewards[_referrer][secondRefereeList[i]];
+      }
+
+      return totalReward - totalRefRewardClaimed[_referrer];
     }
 
     function _addStakeReferrer(
@@ -590,27 +588,27 @@ contract StakingRewards is
     }
 
     // Allows users to unstake a specified amount of staked tokens
-    function unstake(uint256 _amount) external whenNotPaused {
+   function unstake(uint256 _amount) external whenNotPaused {
         require(_amount != 0, "amount = 0");
         require(
-            tokensStaked[msg.sender] >= _amount,
-            "You didn't staked enough tokens to unstake!"
+           tokensStaked[msg.sender] >= _amount,
+           "You didn't stake enough tokens to unstake!"
         );
 
         uint256 unstakeFeeAmount = (_amount * unstakeFee) /
-            PERCENTAGE_DENOMINATOR;
+           PERCENTAGE_DENOMINATOR;
 
         if (referrers[msg.sender] != address(0)) {
-            unstakeFeeAmount =
-                (unstakeFeeAmount * discountUnstakeFee) /
-                PERCENTAGE_DENOMINATOR;
+           unstakeFeeAmount =
+               (unstakeFeeAmount * discountUnstakeFee) /
+               PERCENTAGE_DENOMINATOR;
             _updateExpectedRefRewards(msg.sender, _amount);
         }
 
         tokensStaked[msg.sender] -= _amount;
         totalStaked -= _amount;
-
-        if (tokensStaked[msg.sender] == 0) {
+ 
+         if (tokensStaked[msg.sender] == 0) {
             allStakers.remove(msg.sender);
         }
 
@@ -621,6 +619,7 @@ contract StakingRewards is
 
         emit UnstakeToken(msg.sender, _amount, block.timestamp);
     }
+
 
     function claimStakingReward() external whenNotPaused returns (bool) {
         uint256 reward = stakingRewardsToRelease[msg.sender] +
@@ -634,7 +633,6 @@ contract StakingRewards is
         if (claimedReward >= stakingRewardsToRelease[msg.sender]) {
             totalStakingRewardsToRelease -= stakingRewardsToRelease[msg.sender];
             stakingRewardsToRelease[msg.sender] = 0;
-            releasedRewardUpdatedAt[msg.sender] = block.timestamp;
         } else {
             totalStakingRewardsToRelease -= claimedReward;
             stakingRewardsToRelease[msg.sender] -= claimedReward;
@@ -647,28 +645,30 @@ contract StakingRewards is
 
 
     function claimReferralReward() external whenNotPaused returns (bool) {
-        uint256 totalRefReward = _calculateTotalRefRewardToClaim(msg.sender) +
-            remainingReferralRewards[msg.sender];
+        // Update expected rewards before calculation
+        _updateExpectedRefRewards(msg.sender);
 
-        uint256 refRewardToClaim = totalRefReward -
-            totalRefRewardClaimed[msg.sender];
+        uint256 totalRefReward = _calculateTotalRefRewardToClaim(msg.sender) + 
+           remainingReferralRewards[msg.sender];
+
+        uint256 refRewardToClaim = totalRefReward - totalRefRewardClaimed[msg.sender];
 
         require(
-            refRewardToClaim > 0,
-            "You don't have referral rewards to claim"
+           refRewardToClaim > 0,
+           "You don't have referral rewards to claim"
         );
 
         uint256 remaining = _claimReward(refRewardToClaim);
         uint256 claimedReward = refRewardToClaim - remaining;
 
         totalRefRewardClaimed[msg.sender] += claimedReward;
-
         remainingReferralRewards[msg.sender] = remaining;
 
         _updateReferralRewards(msg.sender, claimedReward);
-        
+
         return true;
     }
+
 
     // Allows users to claim their rewards
     function _claimReward(uint256 _amount) internal returns (uint256) {
